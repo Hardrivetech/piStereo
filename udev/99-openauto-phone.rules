@@ -1,0 +1,37 @@
+# 99-openauto-phone.rules
+# Start/stop OpenAuto on phone USB add/remove for common vendors.
+# Replace 'openauto.service' with your actual OpenAuto service name if needed.
+# Uses full path to systemctl because udev runs in a limited environment.
+
+# Google (Pixel)
+ACTION=="add", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="18d1", RUN+="/bin/systemctl start openauto.service"
+ACTION=="remove", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="18d1", RUN+="/bin/systemctl stop openauto.service"
+
+# Samsung
+ACTION=="add", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="04e8", RUN+="/bin/systemctl start openauto.service"
+ACTION=="remove", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="04e8", RUN+="/bin/systemctl stop openauto.service"
+
+# Huawei
+ACTION=="add", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="12d1", RUN+="/bin/systemctl start openauto.service"
+ACTION=="remove", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="12d1", RUN+="/bin/systemctl stop openauto.service"
+
+# HTC / Other common vendors (add more as needed)
+ACTION=="add", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="0bb4", RUN+="/bin/systemctl start openauto.service"
+ACTION=="remove", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="0bb4", RUN+="/bin/systemctl stop openauto.service"
+
+ACTION=="add", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="2a70", RUN+="/bin/systemctl start openauto.service"
+ACTION=="remove", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="2a70", RUN+="/bin/systemctl stop openauto.service"
+
+ACTION=="add", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="2a47", RUN+="/bin/systemctl start openauto.service"
+ACTION=="remove", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="2a47", RUN+="/bin/systemctl stop openauto.service"
+
+ACTION=="add", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="22d9", RUN+="/bin/systemctl start openauto.service"
+ACTION=="remove", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="22d9", RUN+="/bin/systemctl stop openauto.service"
+
+ACTION=="add", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="2b7c", RUN+="/bin/systemctl start openauto.service"
+ACTION=="remove", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="2b7c", RUN+="/bin/systemctl stop openauto.service"
+
+# NOTE:
+# - Some phones expose different vendor/product IDs depending on USB mode (MTP, ADB, charging).
+# - If a rule doesn't trigger for your phone, plug the phone in, run `udevadm info -a -p $(udevadm info -q path -n /dev/bus/usb/<BUS>/<DEV>)` or `lsusb` to find the ID_VENDOR_ID/ID_MODEL_ID to add here.
+# - For event-driven behavior tied to kernel interfaces, consider using ENV{ID_VENDOR_ID} and ENV{ID_MODEL_ID} pairs.

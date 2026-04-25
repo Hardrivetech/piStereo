@@ -1,0 +1,27 @@
+graph TB
+  Battery((Battery +12V))
+  Fuse[Inline fuse]
+  PowerCtrl[Power controller / Latching relay]
+  Buck[DC-DC buck 12V → 5V (6–10A)]
+  Pi[Pi 5 (5V)]
+  USBAudio[USB multichannel audio interface]
+  RCA_Front[RCA Front L/R]
+  RCA_Rear[RCA Rear L/R]
+  RCA_Sub[RCA Sub]
+  Amp[Car amplifier (RCA in → speaker out)]
+  Speakers[Screw terminal speaker outputs]
+  ACC[ACC (Ignition switched 12V)]
+  Divider[Voltage divider + RC filter]
+  ACC_GPIO[ACC GPIO (3.3V)]
+  AmpRemote[Amp remote-turn-on]
+  Chassis[Chassis ground]
+
+  Battery --> Fuse --> PowerCtrl --> Buck --> Pi
+  Pi --> USBAudio --> RCA_Front
+  USBAudio --> RCA_Rear
+  USBAudio --> RCA_Sub
+  Battery --> Amp --> Speakers
+  PowerCtrl --> AmpRemote --> Amp
+  ACC --> Divider --> ACC_GPIO
+  Chassis --> Pi
+  Chassis --> Amp

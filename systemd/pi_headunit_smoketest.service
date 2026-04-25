@@ -1,0 +1,14 @@
+[Unit]
+Description=piStereo bench smoketest (oneshot)
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/pi_headunit/src/smoketest.py
+StandardOutput=journal
+StandardError=journal
+User=root
+WorkingDirectory=/opt/pi_headunit
+
+[Install]
+WantedBy=multi-user.target

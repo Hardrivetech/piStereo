@@ -1,0 +1,12 @@
+[Unit]
+Description=OpenAuto Phone Presence Monitor
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/pi_headunit/bin/openauto_monitor.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
