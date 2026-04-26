@@ -6,7 +6,8 @@ Wants=graphical.target
 [Service]
 User=pi
 Environment=DISPLAY=:0
-ExecStart=/usr/bin/python3 /opt/pi_headunit/src/display_now_playing.py
+Environment=XAUTHORITY=/home/pi/.Xauthority
+ExecStart=/opt/pi_headunit/bin/run_python.sh /opt/pi_headunit/src/display_now_playing.py
 Restart=always
 RestartSec=5
 
