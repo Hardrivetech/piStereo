@@ -17,17 +17,28 @@ SKIP_UDEV=0
 SKIP_AUDIO=0
 FORCE_CONFIG=0
 USER_NAME=pi
+NO_CREATE_USER=0
+CREATE_SERVICE_USER=0
+YES=0
+PASSWORD=""
+PASSWORD_FILE=""
 
 # Logging
 LOG_DIR=/var/log/pi_headunit
 LOG_FILE=$LOG_DIR/install.log
+LOGROTATE_CONF=/etc/logrotate.d/pi_headunit
 
 usage() {
   cat <<EOF
 Usage: $0 [--prefix PATH] [--user USER] [--dry-run] [--skip-udev] [--skip-audio] [--force-config] [-h]
   --prefix PATH     Install prefix (default: /opt/pi_headunit)
   --user USER       Owner user for deployed files (default: pi)
+  --create-service-user  Explicitly create the service user if missing
+  --no-create-user  Do NOT create the service user
   --dry-run         Print actions without making changes
+  --yes, -y         Generate and set a random password for service user
+  --password PWD    Set the service user password noninteractively (use with caution)
+  --password-file FILE  Read password from FILE (safer than CLI arg)
   --skip-udev       Do not install OpenAuto udev rules
   --skip-audio      Do not run audio setup helper
   --force-config    Overwrite /etc/pi_headunit/config.ini if present
@@ -40,7 +51,12 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --prefix) PREFIX="$2"; shift 2;;
     --user) USER_NAME="$2"; shift 2;;
+    --create-service-user) CREATE_SERVICE_USER=1; shift;;
+    --no-create-user) NO_CREATE_USER=1; shift;;
     --dry-run) DRY_RUN=1; shift;;
+    --yes|-y) YES=1; shift;;
+    --password) PASSWORD="$2"; shift 2;;
+    --password-file) PASSWORD_FILE="$2"; shift 2;;
     --skip-udev) SKIP_UDEV=1; shift;;
     --skip-audio) SKIP_AUDIO=1; shift;;
     --force-config) FORCE_CONFIG=1; shift;;
@@ -58,15 +74,17 @@ fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Sudo helper
+SUDO=''
 if [ "$(id -u)" -ne 0 ]; then
   if [ "$DRY_RUN" -eq 1 ]; then
     echo "[DRY-RUN] would ensure log directory $LOG_DIR exists"
   else
-  if command -v sudo >/dev/null 2>&1; then
-    SUDO='sudo'
-  else
-    echo "This script needs root. Run as root or install sudo." >&2
-    exit 1
+    if command -v sudo >/dev/null 2>&1; then
+      SUDO='sudo'
+    else
+      echo "This script needs root. Run as root or install sudo." >&2
+      exit 1
+    fi
   fi
 else
   SUDO=''
@@ -86,9 +104,15 @@ run() {
     if [ -n "$SUDO" ]; then
       # log then run
       $SUDO bash -c "echo \"$(date -u +%Y-%m-%dT%H:%M:%SZ) RUN: $cmd_str\" >> '$LOG_FILE'"
+      if command -v logger >/dev/null 2>&1; then
+        $SUDO logger -t pi_headunit-installer "RUN: $cmd_str" || true
+      fi
       $SUDO "$@"
     else
       echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) RUN: $cmd_str" >> "$LOG_FILE" || true
+      if command -v logger >/dev/null 2>&1; then
+        logger -t pi_headunit-installer "RUN: $cmd_str" || true
+      fi
       "$@"
     fi
   fi
@@ -115,24 +139,75 @@ else
 fi
 
 # Ensure the target service user exists (create if missing)
-if id -u "$USER_NAME" >/dev/null 2>&1; then
-  echo "Using existing user $USER_NAME"
-  run echo "Using existing user $USER_NAME"
+if [ "$NO_CREATE_USER" -eq 1 ]; then
+  echo "Skipping service user creation (--no-create-user set)."
+  run echo "Skipping service user creation (--no-create-user)"
 else
-  echo "Creating service user $USER_NAME (disabled password)"
-  if [ "$DRY_RUN" -eq 1 ]; then
-    echo "[DRY-RUN] would create user $USER_NAME"
-    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) [DRY-RUN] would create user $USER_NAME" >> "$LOG_FILE" || true
-  else
-    if command -v adduser >/dev/null 2>&1; then
-      run adduser --disabled-password --gecos "" "$USER_NAME"
+    if id -u "$USER_NAME" >/dev/null 2>&1; then
+      echo "Using existing user $USER_NAME"
+      run echo "Using existing user $USER_NAME"
     else
-      run useradd -r -m -s /usr/sbin/nologin "$USER_NAME"
+      if [ "$CREATE_SERVICE_USER" -eq 1 ]; then
+        echo "Creating service user $USER_NAME (explicit --create-service-user)"
+      else
+        echo "Creating service user $USER_NAME"
+      fi
+      if [ "$DRY_RUN" -eq 1 ]; then
+        echo "[DRY-RUN] would create user $USER_NAME"
+        echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) [DRY-RUN] would create user $USER_NAME" >> "$LOG_FILE" || true
+      else
+        if command -v adduser >/dev/null 2>&1; then
+          run adduser --disabled-password --gecos "" "$USER_NAME"
+        else
+          run useradd -r -m -s /usr/sbin/nologin "$USER_NAME"
+        fi
+      fi
+    fi
+fi
+
+# Ownership
+# If requested, set the service user's password noninteractively.
+# Supports: --password PWD, --password-file FILE, or --yes to generate a random password.
+if [ "$NO_CREATE_USER" -eq 0 ]; then
+  # load password from file if provided
+  if [ -n "$PASSWORD_FILE" ]; then
+    if [ -f "$PASSWORD_FILE" ]; then
+      PASSWORD="$(cat "$PASSWORD_FILE")"
+    else
+      echo "Password file not found: $PASSWORD_FILE" >&2
+      exit 1
+    fi
+  fi
+
+  if [ -n "$PASSWORD" ]; then
+    echo "Setting password for $USER_NAME (noninteractive)"
+    if [ "$DRY_RUN" -eq 1 ]; then
+      echo "[DRY-RUN] would set password for $USER_NAME"
+    else
+      if [ -n "$SUDO" ]; then
+        echo "$USER_NAME:$PASSWORD" | $SUDO chpasswd
+      else
+        echo "$USER_NAME:$PASSWORD" | chpasswd
+      fi
+      run echo "Set password for $USER_NAME"
+    fi
+  elif [ "$YES" -eq 1 ]; then
+    echo "Generating random password for $USER_NAME"
+    if [ "$DRY_RUN" -eq 1 ]; then
+      echo "[DRY-RUN] would generate and set random password for $USER_NAME"
+    else
+      RANDPW=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)
+      if [ -n "$SUDO" ]; then
+        echo "$USER_NAME:$RANDPW" | $SUDO chpasswd
+      else
+        echo "$USER_NAME:$RANDPW" | chpasswd
+      fi
+      echo "Generated password for $USER_NAME: $RANDPW"
+      run echo "Generated random password for $USER_NAME (not logged)"
     fi
   fi
 fi
 
-# Ownership
 echo "Setting ownership to $USER_NAME:$USER_NAME"
 run chown -R "$USER_NAME":"$USER_NAME" "$PREFIX" || true
 
@@ -145,6 +220,38 @@ run chown -R "$USER_NAME":"$USER_NAME" "$PREFIX" || true
     mkdir -p "$LOG_DIR" || true
     touch "$LOG_FILE" || true
   fi
+
+# Install logrotate configuration for installer log
+echo "Installing logrotate configuration for $LOG_FILE"
+if [ "$DRY_RUN" -eq 1 ]; then
+  echo "[DRY-RUN] would install logrotate config to $LOGROTATE_CONF"
+else
+  if [ -n "$SUDO" ]; then
+    $SUDO bash -c "cat > '$LOGROTATE_CONF' <<'LR'
+$LOG_FILE {
+    weekly
+    rotate 4
+    compress
+    missingok
+    notifempty
+    create 0644 root root
+}
+LR"
+    $SUDO chmod 644 "$LOGROTATE_CONF" || true
+  else
+    cat > "$LOGROTATE_CONF" <<'LR'
+$LOG_FILE {
+    weekly
+    rotate 4
+    compress
+    missingok
+    notifempty
+    create 0644 root root
+}
+LR
+    chmod 644 "$LOGROTATE_CONF" || true
+  fi
+fi
 
 # Create config dir and copy default config if needed
 run mkdir -p "$CONFIG_DIR"
