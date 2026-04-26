@@ -34,11 +34,43 @@ HOLD = getint('POWER', 'hold_seconds', fallback=2)
 shutdown_in_progress = False
 _power_press_time = None
 
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(A_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(B_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-for p in (SW_PIN, BTN_PREV, BTN_NEXT, BTN_PLAY, BTN_POWER, ACC_PIN):
-    GPIO.setup(p, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+# Attempt to initialize real GPIO; fall back to a mock if unavailable
+GPIO_MOCK = False
+try:
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(A_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(B_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    for p in (SW_PIN, BTN_PREV, BTN_NEXT, BTN_PLAY, BTN_POWER, ACC_PIN):
+        GPIO.setup(p, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+except Exception as _e:
+    # Could be running on non-RPi hardware, or access to /dev/mem/device-tree blocked
+    print('GPIO unavailable; falling back to MockGPIO:', _e, file=sys.stderr)
+    class MockGPIO:
+        BCM = 'BCM'
+        IN = 'IN'
+        PUD_UP = 'PUD_UP'
+        LOW = 0
+        HIGH = 1
+        RISING = 'RISING'
+        FALLING = 'FALLING'
+
+        def setmode(self, mode):
+            return None
+
+        def setup(self, pin, mode, pull_up_down=None):
+            return None
+
+        def input(self, pin):
+            return self.LOW
+
+        def add_event_detect(self, pin, edge, callback=None, bouncetime=None):
+            return None
+
+        def cleanup(self):
+            return None
+
+    GPIO = MockGPIO()
+    GPIO_MOCK = True
 
 
 def change_volume(delta_percent):
