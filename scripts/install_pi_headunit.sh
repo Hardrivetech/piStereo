@@ -211,6 +211,15 @@ fi
 echo "Setting ownership to $USER_NAME:$USER_NAME"
 run chown -R "$USER_NAME":"$USER_NAME" "$PREFIX" || true
 
+# Ensure wrapper and other bin scripts are executable and have Unix line endings
+if [ -d "$PREFIX/bin" ]; then
+  if [ -f "$PREFIX/bin/run_python.sh" ]; then
+    echo "Normalizing and making $PREFIX/bin/run_python.sh executable"
+    run chmod +x "$PREFIX/bin/run_python.sh" || true
+    run sed -i 's/\r$//' "$PREFIX/bin/run_python.sh" || true
+  fi
+fi
+
   if [ -n "$SUDO" ]; then
     $SUDO mkdir -p "$LOG_DIR" || true
     $SUDO touch "$LOG_FILE" || true
