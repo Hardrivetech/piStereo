@@ -268,9 +268,27 @@ else
 fi
 
 # Install Python deps if requirements.txt present
+VENV_DIR="$PREFIX/venv"
 if [ -f "$REPO_ROOT/requirements.txt" ]; then
   echo "Installing Python requirements from requirements.txt"
-  run pip3 install -r "$REPO_ROOT/requirements.txt"
+  if run pip3 install -r "$REPO_ROOT/requirements.txt"; then
+    echo "Python requirements installed system-wide"
+  else
+    echo "System pip install failed or blocked by PEP 668; falling back to virtualenv at $VENV_DIR"
+    if [ "$DRY_RUN" -eq 1 ]; then
+      echo "[DRY-RUN] would create virtualenv at $VENV_DIR and install requirements"
+    else
+      if ! command -v python3 >/dev/null 2>&1; then
+        echo "python3 not found; cannot create virtualenv. Install python3 or install packages via apt." >&2
+        exit 1
+      fi
+      run python3 -m venv "$VENV_DIR"
+      run "$VENV_DIR/bin/python" -m pip install --upgrade pip setuptools wheel
+      run "$VENV_DIR/bin/pip" install -r "$REPO_ROOT/requirements.txt"
+      run chown -R "$USER_NAME":"$USER_NAME" "$VENV_DIR" || true
+      echo "Virtualenv created at $VENV_DIR; adjust service ExecStart to use $VENV_DIR/bin/python if needed."
+    fi
+  fi
 else
   echo "No requirements.txt found — skipping pip install"
 fi
